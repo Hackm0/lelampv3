@@ -10,7 +10,6 @@ from scipy.io.wavfile import write
 import queue
 import threading
 import time
-from lelamp.service.wake.wake_service import WakeService
 
 # ----------------------------
 # Setup TTS safely using espeak as fallback
@@ -160,19 +159,10 @@ def main_loop():
     silence_chunks = int(silence_duration_ms / chunk_duration_ms)
     
     while True:
-        # This is where the wake word callback would set an event
-        print("\nWaiting for wake word...")
-        wake_word_event.wait()  # Wait until the wake word is detected
-        wake_word_event.clear() # Reset the event
+        # Wake word detection has been removed. The loop now starts listening immediately.
         
-        print("Wake word detected!")
-        
-        # --- 1. Play activation sound ---
-        # Assuming you have a sound file here. If not, this will be skipped.
-        play_sound("activation.wav") # You need to have this file
-        
-        # --- 2. Record user's command with VAD ---
-        print("Listening for command...")
+        # --- 1. Record user's command with VAD ---
+        print("\nListening for your command...")
         audio_chunks = []
         silent_chunks_count = 0
         
@@ -246,30 +236,13 @@ if __name__ == "__main__":
         raise ValueError("GEMINI_API_KEY not found or not set in .env file.")
     genai.configure(api_key=api_key)
 
-    # --- Setup Wake Word Detection ---
-    wake_word_event = threading.Event()
-    def on_wake_word():
-        if not wake_word_event.is_set():
-            wake_word_event.set()
+    # --- Wake Word Detection has been removed ---
 
+    # --- Start main application loop ---
+    # The main loop now runs directly in the main thread.
     try:
-        wake_service = WakeService(wake_phrases=["hey lamp", "wake up"])
-        wake_service.start(on_wake_word)
-        print("Wake word service started.")
-    except Exception as e:
-        print(f"Could not start wake word service: {e}")
-        raise
-
-    # --- Start main application loop in a separate thread ---
-    main_thread = threading.Thread(target=main_loop)
-    main_thread.daemon = True
-    main_thread.start()
-
-    try:
-        # Keep the main thread alive to listen for KeyboardInterrupt
-        while True:
-            time.sleep(1)
+        main_loop()
     except KeyboardInterrupt:
         print("\nShutting down...")
-        wake_service.stop()
-        print("Wake service stopped.")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
