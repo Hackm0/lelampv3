@@ -1,9 +1,11 @@
 import sounddevice as sd
 import numpy as np
 import whisper
-import openai
 import subprocess
 import warnings
+import os
+import google.generativeai as genai
+from dotenv import load_dotenv
 from scipy.io.wavfile import write
 
 # ----------------------------
@@ -151,18 +153,14 @@ but do not give the full answer unless asked explicitly.
 """
 
 # Read API key from .env file
-import os
-from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
-api_key = os.getenv("OPENAI_API_KEY")
+api_key = os.getenv("GEMINI_API_KEY")
 
-client = openai.OpenAI(api_key=api_key)
-response = client.chat.completions.create(
-    model="gpt-4",
-    messages=[{"role": "system", "content": prompt}]
-)
+genai.configure(api_key=api_key)
+model = genai.GenerativeModel("gemini-1.5-flash")
+response = model.generate_content(prompt)
 
-lamp_response = response.choices[0].message.content.strip()
+lamp_response = response.text.strip()
 
 # ----------------------------
 # Speak the response
