@@ -55,23 +55,61 @@ def speak(text):
             print(f"No TTS available. Response: {text}")
 
 # ----------------------------
-# Find Seeed audio device
+# Find audio device (Seeed preferred, fallback to default)
 # ----------------------------
-def get_seeed_device(output=True):
+def get_audio_device(output=True):
+    """Find Seeed audio device or fall back to default system device"""
     devices = sd.query_devices()
+    
+    # First, try to find Seeed device
     seeed_devices = [(i, d) for i, d in enumerate(devices) if "seeed" in d['name'].lower()]
     for i, d in seeed_devices:
         if output and d['max_output_channels'] > 0:
+            print(f"Using Seeed output device: {d['name']}")
             return i
         if not output and d['max_input_channels'] > 0:
+            print(f"Using Seeed input device: {d['name']}")
             return i
+    
+    # Fallback to default system device
+    try:
+        if output:
+            default = sd.default.device[1]  # output device
+            if default is not None:
+                print(f"Seeed not found, using default output device: {devices[default]['name']}")
+                return default
+        else:
+            default = sd.default.device[0]  # input device
+            if default is not None:
+                print(f"Seeed not found, using default input device: {devices[default]['name']}")
+                return default
+    except:
+        pass
+    
+    # Last resort: find any device with input/output channels
+    for i, d in enumerate(devices):
+        if output and d['max_output_channels'] > 0:
+            print(f"Using fallback output device: {d['name']}")
+            return i
+        if not output and d['max_input_channels'] > 0:
+            print(f"Using fallback input device: {d['name']}")
+            return i
+    
     return None
 
-seeed_output = get_seeed_device(output=True)
-seeed_input  = get_seeed_device(output=False)
+# List available devices for debugging
+print("Available audio devices:")
+for i, d in enumerate(sd.query_devices()):
+    print(f"  {i}: {d['name']} (in: {d['max_input_channels']}, out: {d['max_output_channels']})")
+print()
 
-if seeed_output is None or seeed_input is None:
-    raise RuntimeError("Seeed audio device not found!")
+audio_output = get_audio_device(output=True)
+audio_input = get_audio_device(output=False)
+
+if audio_input is None:
+    raise RuntimeError("No audio input device found!")
+if audio_output is None:
+    print("Warning: No audio output device found, TTS may not work")
 
 # ----------------------------
 # Record audio
@@ -84,7 +122,7 @@ recording = sd.rec(
     int(duration * sample_rate),
     samplerate=sample_rate,
     channels=1,
-    device=seeed_input
+    device=audio_input
 )
 sd.wait()
 
