@@ -156,7 +156,7 @@ api_key_path = "sk-proj-PF2wgh5d3mJRUSUrofReZCc1c_il0xoAsnhglSgzvLrV6YPZXx9plnml
 with open(api_key_path, "r") as f:
     api_key = f.read().strip()
 
-client = openai.OpenAI(api_key=api_key)
+client = openai.OpenAI(api_key="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")
 response = client.chat.completions.create(
     model="gpt-4",
     messages=[{"role": "system", "content": prompt}]
