@@ -131,8 +131,11 @@ write("temp_input.wav", sample_rate, recording)
 # ----------------------------
 # Transcribe with Whisper
 # ----------------------------
-model = whisper.load_model("base")  # options: tiny, small, base, medium, large
-result = model.transcribe("temp_input.wav")
+import warnings
+warnings.filterwarnings("ignore", message="FP16 is not supported on CPU")
+
+model = whisper.load_model("base", device="cpu")  # options: tiny, small, base, medium, large
+result = model.transcribe("temp_input.wav", fp16=False)
 user_text = result["text"].strip()
 print("You said:", user_text)
 
