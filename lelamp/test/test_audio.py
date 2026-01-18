@@ -3,6 +3,7 @@ import numpy as np
 import whisper
 import openai
 import subprocess
+import warnings
 from scipy.io.wavfile import write
 
 # ----------------------------
@@ -17,15 +18,9 @@ def init_pyttsx3():
         import pyttsx3
         tts = pyttsx3.init()
         tts.setProperty("rate", 165)
-        voices = tts.getProperty('voices')
-        # Try each voice until one works
-        for voice in voices:
-            try:
-                tts.setProperty('voice', voice.id)
-                return True
-            except:
-                continue
-        return False
+        # Don't try to set voices - use the default
+        # Setting voices often fails on Linux with espeak backend
+        return True
     except Exception as e:
         print(f"pyttsx3 initialization failed: {e}")
         return False
@@ -33,7 +28,24 @@ def init_pyttsx3():
 use_pyttsx3 = init_pyttsx3()
 
 def speak(text):
-    """Speak text aloud using pyttsx3 or fallback to espeak"""
+    """Speak text aloud using espeak directly (most reliable on Linux)"""
+    # Use espeak directly - it's the most reliable on Linux/Raspberry Pi
+    try:
+        subprocess.run(['espeak', '-s', '165', text], check=True, 
+                      stderr=subprocess.DEVNULL)
+        return
+    except FileNotFoundError:
+        pass
+    
+    # Try espeak-ng if espeak is not available
+    try:
+        subprocess.run(['espeak-ng', '-s', '165', text], check=True,
+                      stderr=subprocess.DEVNULL)
+        return
+    except FileNotFoundError:
+        pass
+    
+    # Last resort: try pyttsx3
     global tts, use_pyttsx3
     if use_pyttsx3 and tts:
         try:
@@ -41,18 +53,9 @@ def speak(text):
             tts.runAndWait()
             return
         except Exception as e:
-            print(f"pyttsx3 failed, falling back to espeak: {e}")
             use_pyttsx3 = False
     
-    # Fallback to espeak (commonly available on Linux/Raspberry Pi)
-    try:
-        subprocess.run(['espeak', text], check=True)
-    except FileNotFoundError:
-        # Try espeak-ng if espeak is not available
-        try:
-            subprocess.run(['espeak-ng', text], check=True)
-        except FileNotFoundError:
-            print(f"No TTS available. Response: {text}")
+    print(f"No TTS available. Response: {text}")
 
 # ----------------------------
 # Find audio device (Seeed preferred, fallback to default)
@@ -131,7 +134,6 @@ write("temp_input.wav", sample_rate, recording)
 # ----------------------------
 # Transcribe with Whisper
 # ----------------------------
-import warnings
 warnings.filterwarnings("ignore", message="FP16 is not supported on CPU")
 
 model = whisper.load_model("base", device="cpu")  # options: tiny, small, base, medium, large
