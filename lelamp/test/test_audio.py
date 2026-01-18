@@ -150,11 +150,11 @@ Give a thoughtful, encouraging response. Suggest rethinking strategies or hints,
 but do not give the full answer unless asked explicitly.
 """
 
-# Read API key from local file (not tracked by git)
+# Read API key from .env file
 import os
-api_key_path = os.path.join(os.path.dirname(__file__), ".openai_key")
-with open(api_key_path, "r") as f:
-    api_key = f.read().strip()
+from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+api_key = os.getenv("OPENAI_API_KEY")
 
 client = openai.OpenAI(api_key=api_key)
 response = client.chat.completions.create(
