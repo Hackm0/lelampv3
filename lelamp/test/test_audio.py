@@ -7,6 +7,10 @@ import os
 import google.generativeai as genai
 from dotenv import load_dotenv
 from scipy.io.wavfile import write
+import queue
+import threading
+import time
+from lelamp.service.wake.wake_service import WakeService
 
 # ----------------------------
 # Setup TTS safely using espeak as fallback
@@ -58,6 +62,26 @@ def speak(text):
             use_pyttsx3 = False
     
     print(f"No TTS available. Response: {text}")
+
+# ----------------------------
+# Play a sound
+# ----------------------------
+def play_sound(sound_path):
+    """Plays a sound file."""
+    try:
+        # Use aplay for broader compatibility on Linux
+        subprocess.run(['aplay', sound_path], check=True, stderr=subprocess.DEVNULL)
+    except (FileNotFoundError, subprocess.CalledProcessError) as e:
+        print(f"Could not play sound {sound_path}: {e}")
+
+# ----------------------------
+# VAD (Voice Activity Detection)
+# ----------------------------
+# A simple energy-based VAD
+def is_speech(chunk, threshold=0.01):
+    """Check if audio chunk contains speech based on RMS energy."""
+    rms = np.sqrt(np.mean(chunk**2))
+    return rms > threshold
 
 # ----------------------------
 # Find audio device (Seeed preferred, fallback to default)
@@ -117,52 +141,135 @@ if audio_output is None:
     print("Warning: No audio output device found, TTS may not work")
 
 # ----------------------------
-# Record audio
+# Main application loop
 # ----------------------------
-duration = 5  # seconds
-sample_rate = 44100
+def main_loop():
+    """The main application loop for the voice assistant."""
+    warnings.filterwarnings("ignore", message="FP16 is not supported on CPU")
+    print("Loading Whisper model for transcription...")
+    transcribe_model = whisper.load_model("base", device="cpu")
+    print("Whisper transcription model loaded.")
 
-print("Listening for 5 seconds...")
-recording = sd.rec(
-    int(duration * sample_rate),
-    samplerate=sample_rate,
-    channels=1,
-    device=audio_input
-)
-sd.wait()
+    sample_rate = 16000  # Whisper's preferred sample rate
+    
+    # --- VAD parameters ---
+    silence_threshold = 0.01  # RMS threshold for silence
+    silence_duration_ms = 1500 # Stop recording after 1.5s of silence
+    chunk_duration_ms = 100 # Process audio in 100ms chunks
+    chunk_samples = int(sample_rate * chunk_duration_ms / 1000)
+    silence_chunks = int(silence_duration_ms / chunk_duration_ms)
+    
+    while True:
+        # This is where the wake word callback would set an event
+        print("\nWaiting for wake word...")
+        wake_word_event.wait()  # Wait until the wake word is detected
+        wake_word_event.clear() # Reset the event
+        
+        print("Wake word detected!")
+        
+        # --- 1. Play activation sound ---
+        # Assuming you have a sound file here. If not, this will be skipped.
+        play_sound("activation.wav") # You need to have this file
+        
+        # --- 2. Record user's command with VAD ---
+        print("Listening for command...")
+        audio_chunks = []
+        silent_chunks_count = 0
+        
+        # Use a stream to capture audio continuously
+        with sd.InputStream(samplerate=sample_rate, channels=1, device=audio_input, blocksize=chunk_samples) as stream:
+            while silent_chunks_count < silence_chunks:
+                audio_chunk, overflowed = stream.read(chunk_samples)
+                if overflowed:
+                    print("Warning: Input overflowed!")
+                
+                audio_chunks.append(audio_chunk)
+                
+                if is_speech(audio_chunk, threshold=silence_threshold):
+                    silent_chunks_count = 0
+                else:
+                    silent_chunks_count += 1
+            
+        print("Finished recording.")
+        recording = np.concatenate(audio_chunks)
+        
+        # Save recording to a temporary file
+        temp_audio_file = "temp_input.wav"
+        write(temp_audio_file, sample_rate, recording)
 
-write("temp_input.wav", sample_rate, recording)
+        # --- 3. Transcribe the audio ---
+        try:
+            result = transcribe_model.transcribe(temp_audio_file, fp16=False)
+            user_text = result["text"].strip()
+            print("You said:", user_text)
 
-# ----------------------------
-# Transcribe with Whisper
-# ----------------------------
-warnings.filterwarnings("ignore", message="FP16 is not supported on CPU")
+            if not user_text:
+                speak("I didn't catch that. Please try again.")
+                continue
 
-model = whisper.load_model("base", device="cpu")  # options: tiny, small, base, medium, large
-result = model.transcribe("temp_input.wav", fp16=False)
-user_text = result["text"].strip()
-print("You said:", user_text)
+        except Exception as e:
+            print(f"Transcription failed: {e}")
+            speak("Sorry, I had trouble understanding you.")
+            continue
 
-# ----------------------------
-# Generate lamp response
-# ----------------------------
-prompt = f"""
-You are a gentle, reflective homework helper lamp. The student said: "{user_text}".
-Give a thoughtful, encouraging response. Suggest rethinking strategies or hints, 
-but do not give the full answer unless asked explicitly.
-"""
+        # --- 4. Generate response from Gemini ---
+        try:
+            prompt = f"""
+            You are a gentle, reflective homework helper lamp. The student said: "{user_text}".
+            Give a thoughtful, encouraging response. Suggest rethinking strategies or hints, 
+            but do not give the full answer unless asked explicitly.
+            """
+            
+            # API key is loaded from .env at the start
+            genai_model = genai.GenerativeModel("gemini-1.5-flash")
+            response = genai_model.generate_content(prompt)
+            lamp_response = response.text.strip()
 
-# Read API key from .env file
-load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
-api_key = os.getenv("GEMINI_API_KEY")
+        except Exception as e:
+            print(f"Gemini API call failed: {e}")
+            speak("I'm having trouble connecting to my brain right now.")
+            continue
 
-genai.configure(api_key=api_key)
-model = genai.GenerativeModel("gemini-1.5-flash")
-response = model.generate_content(prompt)
+        # --- 5. Speak the response ---
+        print("LeLamp:", lamp_response)
+        speak(lamp_response)
 
-lamp_response = response.text.strip()
 
-# ----------------------------
-# Speak the response
-# ----------------------------
-speak(lamp_response)
+if __name__ == "__main__":
+    # --- Setup API Key ---
+    dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+    if not os.path.exists(dotenv_path):
+        print("ERROR: .env file not found. Please create one with your GEMINI_API_KEY.")
+    load_dotenv(dotenv_path)
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key or api_key == "REPLACE_WITH_YOUR_API_KEY":
+        raise ValueError("GEMINI_API_KEY not found or not set in .env file.")
+    genai.configure(api_key=api_key)
+
+    # --- Setup Wake Word Detection ---
+    wake_word_event = threading.Event()
+    def on_wake_word():
+        if not wake_word_event.is_set():
+            wake_word_event.set()
+
+    try:
+        wake_service = WakeService(wake_phrases=["hey lamp", "wake up"])
+        wake_service.start(on_wake_word)
+        print("Wake word service started.")
+    except Exception as e:
+        print(f"Could not start wake word service: {e}")
+        raise
+
+    # --- Start main application loop in a separate thread ---
+    main_thread = threading.Thread(target=main_loop)
+    main_thread.daemon = True
+    main_thread.start()
+
+    try:
+        # Keep the main thread alive to listen for KeyboardInterrupt
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("\nShutting down...")
+        wake_service.stop()
+        print("Wake service stopped.")
