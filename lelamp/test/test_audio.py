@@ -6,12 +6,12 @@ import openai
 from scipy.io.wavfile import write
 
 # ----------------------------
-# Setup TTS
+# Setup TTS safely
 # ----------------------------
 tts = pyttsx3.init()
 tts.setProperty("rate", 165)
 
-# Ensure a valid voice is selected
+# Automatically pick a working voice to avoid errors
 voices = tts.getProperty('voices')
 if voices:
     tts.setProperty('voice', voices[0].id)  # pick the first available voice
@@ -60,7 +60,7 @@ write("temp_input.wav", sample_rate, recording)
 # ----------------------------
 # Transcribe with Whisper
 # ----------------------------
-model = whisper.load_model("base")  # tiny, small, base, medium, large
+model = whisper.load_model("base")  # options: tiny, small, base, medium, large
 result = model.transcribe("temp_input.wav")
 user_text = result["text"].strip()
 print("You said:", user_text)
