@@ -150,7 +150,13 @@ Give a thoughtful, encouraging response. Suggest rethinking strategies or hints,
 but do not give the full answer unless asked explicitly.
 """
 
-client = openai.OpenAI(api_key="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")
+# Read API key from local file (not tracked by git)
+import os
+api_key_path = os.path.join(os.path.dirname(__file__), ".openai_key")
+with open(api_key_path, "r") as f:
+    api_key = f.read().strip()
+
+client = openai.OpenAI(api_key=api_key)
 response = client.chat.completions.create(
     model="gpt-4",
     messages=[{"role": "system", "content": prompt}]
