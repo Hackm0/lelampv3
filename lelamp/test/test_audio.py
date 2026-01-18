@@ -145,8 +145,9 @@ if audio_output is None:
 def main_loop():
     """The main application loop for the voice assistant."""
     warnings.filterwarnings("ignore", message="FP16 is not supported on CPU")
-    print("Loading Whisper model for transcription...")
-    transcribe_model = whisper.load_model("base", device="cpu")
+    print("Loading Whisper 'tiny' model for transcription...")
+    # Use the 'tiny' model for much faster performance on Raspberry Pi
+    transcribe_model = whisper.load_model("tiny", device="cpu")
     print("Whisper transcription model loaded.")
 
     sample_rate = 16000  # Whisper's preferred sample rate
@@ -189,6 +190,7 @@ def main_loop():
 
         # --- 3. Transcribe the audio ---
         try:
+            print("Transcribing audio...")
             result = transcribe_model.transcribe(temp_audio_file, fp16=False)
             user_text = result["text"].strip()
             print("You said:", user_text)
@@ -204,6 +206,7 @@ def main_loop():
 
         # --- 4. Generate response from Gemini ---
         try:
+            print("Generating response from Gemini...")
             prompt = f"""
             You are a gentle, reflective homework helper lamp. The student said: "{user_text}".
             Give a thoughtful, encouraging response. Suggest rethinking strategies or hints, 
