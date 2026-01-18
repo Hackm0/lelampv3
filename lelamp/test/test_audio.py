@@ -1,8 +1,16 @@
 import sounddevice as sd
 import numpy as np
+import pyttsx3
+import whisper
+import openai
+
+tts = pyttsx3.init()
+tts.setProperty("rate", 165)
+def speak(text):
+    tts.say(text)
+    tts.runAndWait()
 
 def get_seeed_device(output=True):
-    """Return the first Seeed device index for output or input."""
     seeed_devices = [
         (i, d) for i, d in enumerate(sd.query_devices())
         if "seeed" in d['name'].lower()
@@ -12,34 +20,39 @@ def get_seeed_device(output=True):
             return i
         if not output and d['max_input_channels'] > 0:
             return i
-    return None  # if not found
-
+    return None
 seeed_output = get_seeed_device(output=True)
 seeed_input  = get_seeed_device(output=False)
 
 if seeed_output is None or seeed_input is None:
     raise RuntimeError("Seeed device not found!")
 
-# --- Test Speaker ---
-duration = 3  # seconds
-sample_rate = 44100  # Hz
+model = whisper.load_model("base")  # smaller/faster: tiny, small, base
 
-print("Playing test tone...")
-frequency = 440  # Hz (A4 note)
-t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
-tone = 0.5 * np.sin(2 * np.pi * frequency * t)
-sd.play(tone, samplerate=sample_rate, device=seeed_output)
+duration = 5
+sample_rate = 44100
+print("Listening for 5 seconds...")
+recording = sd.rec(int(duration * sample_rate), samplerate=sample_rate, channels=1, device=seeed_input)
 sd.wait()
 
-# --- Test Microphone ---
-print("Recording from microphone...")
-recording = sd.rec(int(duration * sample_rate), samplerate=sample_rate,
-                   channels=1, device=seeed_input)
-sd.wait()
-print("Recording complete.")
+from scipy.io.wavfile import write
+write("temp_input.wav", sample_rate, recording)
 
-# --- Playback Recorded Audio ---
-print("Playing back recorded audio...")
-sd.play(recording, samplerate=sample_rate, device=seeed_output)
-sd.wait()
-print("Done.")
+result = model.transcribe("temp_input.wav")
+user_text = result["text"]
+print("You said:", user_text)
+
+prompt = f"""
+You are a gentle, reflective homework helper lamp. The student said: "{user_text}".
+Give a thoughtful, encouraging response. Suggest rethinking strategies or hints, 
+but do not give the full answer unless asked explicitly.
+"""
+response = openai.ChatCompletion.create(
+    model="gpt-4",
+    messages=[{"role": "system", "content": prompt}]
+)
+
+lamp_response = response.choices[0].message.content.strip()
+print("Lamp says:", lamp_response)
+
+speak(lamp_response)
