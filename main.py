@@ -9,6 +9,8 @@ Architecture:
   - Agent (lelamp.py) consumes services from globals
   - This file orchestrates startup and cleanup
 """
+
+#comment
 # Ignore warnings from protobuf to keep log clean
 import warnings
 warnings.filterwarnings("ignore", message=".*SymbolDatabase.GetPrototype.*")
