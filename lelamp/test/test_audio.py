@@ -152,11 +152,11 @@ but do not give the full answer unless asked explicitly.
 
 # Read API key from local file (not tracked by git)
 import os
-api_key_path = "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"
+api_key_path = os.path.join(os.path.dirname(__file__), ".openai_key")
 with open(api_key_path, "r") as f:
     api_key = f.read().strip()
 
-client = openai.OpenAI(api_key="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")
+client = openai.OpenAI(api_key=api_key)
 response = client.chat.completions.create(
     model="gpt-4",
     messages=[{"role": "system", "content": prompt}]
