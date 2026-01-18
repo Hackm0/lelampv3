@@ -150,7 +150,8 @@ Give a thoughtful, encouraging response. Suggest rethinking strategies or hints,
 but do not give the full answer unless asked explicitly.
 """
 
-response = openai.ChatCompletion.create(
+client = openai.OpenAI()
+response = client.chat.completions.create(
     model="gpt-4",
     messages=[{"role": "system", "content": prompt}]
 )
