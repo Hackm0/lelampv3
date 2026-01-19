@@ -1,3 +1,11 @@
+This repository contains our submission for **UOFTHacks 13**, where we placed **2nd overall** in the challenge **“Hack the Human-Robot Experience”**, hosted by [LeLamp](https://github.com/humancomputerlab/LeLamp) (by [Human Computer Lab](https://www.humancomputerlab.com/)).
+
+## 🎥 Demonstration
+
+[![Emotion Detection Demo](https://img.youtube.com/vi/gwU1twqMq40/maxresdefault.jpg)](https://www.youtube.com/watch?v=gwU1twqMq40)
+
+
+
 # LeLamp Runtime - 12V Agent Edition
 
 ![](./assets/images/Banner.png)
